@@ -1,0 +1,21 @@
+# Node
+node_modules/
+
+# CAP build output
+/gen/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Local databases
+*.sqlite
+*.db
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
