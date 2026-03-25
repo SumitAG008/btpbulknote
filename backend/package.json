@@ -23,6 +23,7 @@
     "requires": {
       "db": {
         "kind": "sqlite",
+        "impl": "@cap-js/sqlite",
         "credentials": {
           "database": "db.sqlite"
         }
