@@ -11,9 +11,9 @@
   },
   "dependencies": {
     "@sap/cds": "^8.7.3",
+    "@cap-js/sqlite": "^1.11.1",
     "@sap-cloud-sdk/connectivity": "^3.24.0",
     "@sap-cloud-sdk/http-client": "^3.24.0",
-    "better-sqlite3": "^11.3.0",
     "nodemailer": "^6.9.13"
   },
   "devDependencies": {
