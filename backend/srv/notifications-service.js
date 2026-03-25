@@ -1,5 +1,6 @@
 const cds = require('@sap/cds')
 const nodemailer = require('nodemailer')
+const { executeHttpRequest } = require('@sap-cloud-sdk/http-client')
 
 function toDateOnly(d) {
   const x = new Date(d)
@@ -39,11 +40,40 @@ async function getEmployees(runDate) {
     ]
   }
 
+  const destinationName = process.env.SF_DESTINATION
+  const destinationPath = process.env.SF_ODATA_PATH || '/User'
+  if (destinationName) {
+    const query = process.env.SF_ODATA_QUERY || '?$top=50&$format=json'
+    const response = await executeHttpRequest(
+      { destinationName },
+      {
+        method: 'GET',
+        url: `${destinationPath}${query}`,
+        headers: { Accept: 'application/json' }
+      }
+    )
+
+    const data = response?.data
+    const results = data?.d?.results ?? data?.value ?? []
+
+    return results
+      .map(r => ({
+        employeeId: String(r.personIdExternal ?? r.userId ?? r.employeeId ?? ''),
+        fullName: r.defaultFullName ?? r.fullName ?? `${r.firstName ?? ''} ${r.lastName ?? ''}`.trim(),
+        email: r.email ?? r.emailAddress ?? r.businessEmail ?? '',
+        dateOfBirth: r.dateOfBirth ?? r.birthday ?? null,
+        hireDate: r.hireDate ?? r.startDate ?? r.originalStartDate ?? null,
+        legalEntity: r.legalEntity ?? r.company ?? null,
+        locale: r.locale ?? r.defaultLocale ?? 'en'
+      }))
+      .filter(e => e.employeeId && e.email)
+  }
+
   const url = process.env.SF_API_URL
   const user = process.env.SF_API_USER
   const pass = process.env.SF_API_PASS
   if (!url || !user || !pass) {
-    throw new Error('Missing SuccessFactors credentials: set SF_API_URL, SF_API_USER, SF_API_PASS or enable SF_MOCK=true')
+    throw new Error('Missing SuccessFactors configuration: set SF_DESTINATION (recommended) or SF_API_URL, SF_API_USER, SF_API_PASS, or enable SF_MOCK=true')
   }
 
   const basic = Buffer.from(`${user}:${pass}`).toString('base64')
