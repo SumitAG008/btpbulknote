@@ -25,6 +25,22 @@ function renderTemplate(tpl, ctx) {
   return tpl.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_, k) => (ctx[k] ?? ''))
 }
 
+function firstEmail(emailNav) {
+  if (!emailNav) return ''
+  if (typeof emailNav === 'string') return emailNav
+  const navResults = emailNav?.results || emailNav?.d?.results || emailNav?.value
+  if (Array.isArray(navResults) && navResults.length) {
+    const pick = navResults.find(x => x?.emailAddress) || navResults[0]
+    return pick?.emailAddress || pick?.email || pick?.address || ''
+  }
+  return emailNav?.emailAddress || emailNav?.email || ''
+}
+
+function extractDob(personNav) {
+  if (!personNav) return null
+  return personNav?.dateOfBirth || personNav?.birthday || null
+}
+
 async function getEmployees(runDate) {
   if ((process.env.SF_MOCK || '').toLowerCase() === 'true') {
     return [
@@ -41,9 +57,11 @@ async function getEmployees(runDate) {
   }
 
   const destinationName = process.env.SF_DESTINATION
-  const destinationPath = process.env.SF_ODATA_PATH || '/User'
+  const destinationPath = process.env.SF_ODATA_PATH || '/EmpEmployment'
   if (destinationName) {
-    const query = process.env.SF_ODATA_QUERY || '?$top=50&$format=json'
+    const query =
+      process.env.SF_ODATA_QUERY ||
+      '?$top=200&$select=userId,startDate,serviceDate&$expand=personNav,emailNav&$format=json'
     const response = await executeHttpRequest(
       { destinationName },
       {
@@ -59,12 +77,17 @@ async function getEmployees(runDate) {
     return results
       .map(r => ({
         employeeId: String(r.personIdExternal ?? r.userId ?? r.employeeId ?? ''),
-        fullName: r.defaultFullName ?? r.fullName ?? `${r.firstName ?? ''} ${r.lastName ?? ''}`.trim(),
-        email: r.email ?? r.emailAddress ?? r.businessEmail ?? '',
-        dateOfBirth: r.dateOfBirth ?? r.birthday ?? null,
-        hireDate: r.hireDate ?? r.startDate ?? r.originalStartDate ?? null,
+        fullName:
+          r.userNav?.defaultFullName ||
+          r.userNav?.fullName ||
+          r.defaultFullName ||
+          r.fullName ||
+          `${r.userNav?.firstName ?? r.firstName ?? ''} ${r.userNav?.lastName ?? r.lastName ?? ''}`.trim(),
+        email: firstEmail(r.emailNav) || r.userNav?.email || r.email || r.emailAddress || r.businessEmail || '',
+        dateOfBirth: extractDob(r.personNav) || r.userNav?.dateOfBirth || r.dateOfBirth || null,
+        hireDate: r.serviceDate || r.startDate || r.hireDate || r.originalStartDate || null,
         legalEntity: r.legalEntity ?? r.company ?? null,
-        locale: r.locale ?? r.defaultLocale ?? 'en'
+        locale: r.locale ?? r.defaultLocale ?? r.userNav?.defaultLocale ?? 'en'
       }))
       .filter(e => e.employeeId && e.email)
   }
