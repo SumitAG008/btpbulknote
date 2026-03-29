@@ -83,39 +83,44 @@ async function getEmployees(runDate) {
     const query =
       process.env.SF_ODATA_QUERY ||
       '?$top=200&$select=userId,startDate,serviceDate&$expand=personNav,emailNav&$format=json'
-    const response = await executeHttpRequest(
-      { destinationName },
-      {
-        method: 'GET',
-        url: `${destinationPath}${query}`,
-        headers: { Accept: 'application/json' }
-      }
-    )
+    try {
+      const response = await executeHttpRequest(
+        { destinationName },
+        {
+          method: 'GET',
+          url: `${destinationPath}${query}`,
+          headers: { Accept: 'application/json' }
+        }
+      )
 
-    const data = response?.data
-    const results = data?.d?.results ?? data?.value ?? []
+      const data = response?.data
+      const results = data?.d?.results ?? data?.value ?? []
 
-    return results
-      .map(r => ({
-        employeeId: String(r.personIdExternal ?? r.userId ?? r.employeeId ?? ''),
-        fullName:
-          r.userNav?.defaultFullName ||
-          r.userNav?.fullName ||
-          r.defaultFullName ||
-          r.fullName ||
-          `${r.userNav?.firstName ?? r.firstName ?? ''} ${r.userNav?.lastName ?? r.lastName ?? ''}`.trim(),
-        email: firstEmail(r.emailNav) || r.userNav?.email || r.email || r.emailAddress || r.businessEmail || '',
-        dateOfBirth:
-          extractDob(r.personNav) ||
-          parseSfODataDate(r.userNav?.dateOfBirth || r.dateOfBirth || r.birthday) ||
-          null,
-        hireDate:
-          parseSfODataDate(r.serviceDate || r.startDate || r.hireDate || r.originalStartDate) ||
-          null,
-        legalEntity: r.legalEntity ?? r.company ?? null,
-        locale: r.locale ?? r.defaultLocale ?? r.userNav?.defaultLocale ?? 'en'
-      }))
-      .filter(e => e.employeeId && e.email)
+      return results
+        .map(r => ({
+          employeeId: String(r.personIdExternal ?? r.userId ?? r.employeeId ?? ''),
+          fullName:
+            r.userNav?.defaultFullName ||
+            r.userNav?.fullName ||
+            r.defaultFullName ||
+            r.fullName ||
+            `${r.userNav?.firstName ?? r.firstName ?? ''} ${r.userNav?.lastName ?? r.lastName ?? ''}`.trim(),
+          email: firstEmail(r.emailNav) || r.userNav?.email || r.email || r.emailAddress || r.businessEmail || '',
+          dateOfBirth:
+            extractDob(r.personNav) ||
+            parseSfODataDate(r.userNav?.dateOfBirth || r.dateOfBirth || r.birthday) ||
+            null,
+          hireDate:
+            parseSfODataDate(r.serviceDate || r.startDate || r.hireDate || r.originalStartDate) ||
+            null,
+          legalEntity: r.legalEntity ?? r.company ?? null,
+          locale: r.locale ?? r.defaultLocale ?? r.userNav?.defaultLocale ?? 'en'
+        }))
+        .filter(e => e.employeeId && e.email)
+    } catch (e) {
+      const msg = String(e && e.message ? e.message : e)
+      if (!msg.toLowerCase().includes("service binding") && !msg.toLowerCase().includes('destination')) throw e
+    }
   }
 
   const url = process.env.SF_API_URL
