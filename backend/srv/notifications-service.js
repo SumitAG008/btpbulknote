@@ -2,8 +2,29 @@ const cds = require('@sap/cds')
 const nodemailer = require('nodemailer')
 const { executeHttpRequest } = require('@sap-cloud-sdk/http-client')
 
+function parseSfODataDate(v) {
+  if (v == null) return null
+  if (v instanceof Date) return v
+  if (typeof v === 'number') return new Date(v)
+
+  if (typeof v === 'string') {
+    // SuccessFactors OData v2 format: /Date(858556800000)/ or /Date(858556800000+0530)/
+    const m = v.match(/\/Date\(([-0-9]+)([+-]\d{4})?\)\//)
+    if (m) {
+      const ms = Number(m[1])
+      // In theory SF can append timezone, but the numeric ms is already UTC epoch.
+      // We ignore the optional offset to avoid double shifting.
+      if (!Number.isNaN(ms)) return new Date(ms)
+    }
+    // ISO date/time or yyyy-mm-dd
+    const d = new Date(v)
+    if (!Number.isNaN(d.getTime())) return d
+  }
+  return null
+}
+
 function toDateOnly(d) {
-  const x = new Date(d)
+  const x = parseSfODataDate(d) || new Date(d)
   return new Date(Date.UTC(x.getUTCFullYear(), x.getUTCMonth(), x.getUTCDate()))
 }
 
@@ -38,7 +59,7 @@ function firstEmail(emailNav) {
 
 function extractDob(personNav) {
   if (!personNav) return null
-  return personNav?.dateOfBirth || personNav?.birthday || null
+  return parseSfODataDate(personNav?.dateOfBirth || personNav?.birthday) || null
 }
 
 async function getEmployees(runDate) {
@@ -84,8 +105,13 @@ async function getEmployees(runDate) {
           r.fullName ||
           `${r.userNav?.firstName ?? r.firstName ?? ''} ${r.userNav?.lastName ?? r.lastName ?? ''}`.trim(),
         email: firstEmail(r.emailNav) || r.userNav?.email || r.email || r.emailAddress || r.businessEmail || '',
-        dateOfBirth: extractDob(r.personNav) || r.userNav?.dateOfBirth || r.dateOfBirth || null,
-        hireDate: r.serviceDate || r.startDate || r.hireDate || r.originalStartDate || null,
+        dateOfBirth:
+          extractDob(r.personNav) ||
+          parseSfODataDate(r.userNav?.dateOfBirth || r.dateOfBirth || r.birthday) ||
+          null,
+        hireDate:
+          parseSfODataDate(r.serviceDate || r.startDate || r.hireDate || r.originalStartDate) ||
+          null,
         legalEntity: r.legalEntity ?? r.company ?? null,
         locale: r.locale ?? r.defaultLocale ?? r.userNav?.defaultLocale ?? 'en'
       }))
